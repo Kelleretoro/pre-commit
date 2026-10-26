@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import logging
 import os.path
 import shlex
@@ -17,9 +18,19 @@ from pre_commit.store import Store
 from pre_commit.util import CalledProcessError
 from pre_commit.util import cmd_output
 from testing.fixtures import git_dir
-from testing.util import cwd
 from testing.util import git_commit
 from testing.util import xfailif_windows
+
+
+def _select_all_configs(store: Store) -> list[str]:
+    with store.connect() as db:
+        rows = db.execute('SELECT * FROM configs').fetchall()
+        return [path for path, in rows]
+
+
+def _select_all_repos(store: Store) -> list[tuple[str, str, str]]:
+    with store.connect() as db:
+        return db.execute('SELECT repo, ref, path FROM repos').fetchall()
 
 
 def test_our_session_fixture_works():
@@ -70,7 +81,7 @@ def test_store_init(store):
 
 def test_clone(store, tempdir_factory, caplog):
     path = git_dir(tempdir_factory)
-    with cwd(path):
+    with contextlib.chdir(path):
         git_commit()
         rev = git.head_rev(path)
         git_commit()
@@ -91,7 +102,7 @@ def test_clone(store, tempdir_factory, caplog):
     assert git.head_rev(ret) == rev
 
     # Assert there's an entry in the sqlite db for this
-    assert store.select_all_repos() == [(path, rev, ret)]
+    assert _select_all_repos(store) == [(path, rev, ret)]
 
 
 def test_warning_for_deprecated_stages_on_init(store, tempdir_factory, caplog):
@@ -190,7 +201,7 @@ def test_clone_shallow_failure_fallback_to_complete(
     caplog,
 ):
     path = git_dir(tempdir_factory)
-    with cwd(path):
+    with contextlib.chdir(path):
         git_commit()
         rev = git.head_rev(path)
         git_commit()
@@ -217,12 +228,12 @@ def test_clone_shallow_failure_fallback_to_complete(
     assert git.head_rev(ret) == rev
 
     # Assert there's an entry in the sqlite db for this
-    assert store.select_all_repos() == [(path, rev, ret)]
+    assert _select_all_repos(store) == [(path, rev, ret)]
 
 
 def test_clone_tag_not_on_mainline(store, tempdir_factory):
     path = git_dir(tempdir_factory)
-    with cwd(path):
+    with contextlib.chdir(path):
         git_commit()
         cmd_output('git', 'checkout', 'master', '-b', 'branch')
         git_commit()
@@ -265,7 +276,7 @@ def test_mark_config_as_used(store, tmpdir):
     with tmpdir.as_cwd():
         f = tmpdir.join('f').ensure()
         store.mark_config_used('f')
-        assert store.select_all_configs() == [f.strpath]
+        assert _select_all_configs(store) == [f.strpath]
 
 
 def test_mark_config_as_used_idempotent(store, tmpdir):
@@ -275,21 +286,12 @@ def test_mark_config_as_used_idempotent(store, tmpdir):
 
 def test_mark_config_as_used_does_not_exist(store):
     store.mark_config_used('f')
-    assert store.select_all_configs() == []
-
-
-def _simulate_pre_1_14_0(store):
-    with store.connect() as db:
-        db.executescript('DROP TABLE configs')
-
-
-def test_select_all_configs_roll_forward(store):
-    _simulate_pre_1_14_0(store)
-    assert store.select_all_configs() == []
+    assert _select_all_configs(store) == []
 
 
 def test_mark_config_as_used_roll_forward(store, tmpdir):
-    _simulate_pre_1_14_0(store)
+    with store.connect() as db:  # simulate pre-1.14.0
+        db.executescript('DROP TABLE configs')
     test_mark_config_as_used(store, tmpdir)
 
 
@@ -314,7 +316,7 @@ def test_mark_config_as_used_readonly(tmpdir):
     assert store.readonly
     # should be skipped due to readonly
     store.mark_config_used(str(cfg))
-    assert store.select_all_configs() == []
+    assert _select_all_configs(store) == []
 
 
 def test_clone_with_recursive_submodules(store, tmp_path):

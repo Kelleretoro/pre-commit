@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import os.path
 import shlex
 import shutil
@@ -27,7 +28,6 @@ from pre_commit.util import cmd_output_b
 from testing.fixtures import make_config_from_repo
 from testing.fixtures import make_repo
 from testing.language_helpers import run_language
-from testing.util import cwd
 from testing.util import get_resource_path
 
 
@@ -239,14 +239,16 @@ def test_control_c_control_c_on_install(tempdir_factory, store):
     # To simulate a killed install, we'll make PythonEnv.run raise ^C
     # and then to simulate a second ^C during cleanup, we'll make shutil.rmtree
     # raise as well.
-    with pytest.raises(MyKeyboardInterrupt):
-        with mock.patch.object(
-            lang_base, 'setup_cmd', side_effect=MyKeyboardInterrupt,
-        ):
-            with mock.patch.object(
+    with (
+            pytest.raises(MyKeyboardInterrupt),
+            mock.patch.object(
+                lang_base, 'setup_cmd', side_effect=MyKeyboardInterrupt,
+            ),
+            mock.patch.object(
                 shutil, 'rmtree', side_effect=MyKeyboardInterrupt,
-            ):
-                install_hook_envs(hooks, store)
+            ),
+    ):
+        install_hook_envs(hooks, store)
 
     # Should have made an environment, however this environment is broken!
     hook, = hooks
@@ -298,7 +300,7 @@ def test_really_long_file_paths(tempdir_factory, store):
     path = make_repo(tempdir_factory, 'python_hooks_repo')
     config = make_config_from_repo(path)
 
-    with cwd(really_long_path):
+    with contextlib.chdir(really_long_path):
         _get_hook(config, store, 'foo')
 
 
@@ -505,4 +507,15 @@ def test_args_with_spaces_and_quotes(tmp_path):
     )
 
     expected = b"['i have spaces', 'and\"\\'quotes', '$and !this']\n"
+    assert ret == (0, expected)
+
+
+def test_hazmat(tmp_path):
+    ret = run_language(
+        tmp_path, unsupported,
+        f'pre-commit hazmat ignore-exit-code {shlex.quote(sys.executable)} '
+        f"-c 'import sys; raise SystemExit(sys.argv[1:])'",
+        ('f1', 'f2'),
+    )
+    expected = b"['f1', 'f2']\n"
     assert ret == (0, expected)

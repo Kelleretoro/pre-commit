@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os.path
 from unittest import mock
 
@@ -8,10 +9,10 @@ import pytest
 
 import pre_commit.constants as C
 from pre_commit import main
+from pre_commit.commands import hazmat
 from pre_commit.errors import FatalError
 from pre_commit.util import cmd_output
 from testing.auto_namedtuple import auto_namedtuple
-from testing.util import cwd
 
 
 def _args(**kwargs):
@@ -62,7 +63,7 @@ def test_install_on_subst(in_git_dir, store):  # pragma: posix no cover
     assert not os.path.exists('Z:')
     cmd_output('subst', 'Z:', str(in_git_dir))
     try:
-        with cwd('Z:'):
+        with contextlib.chdir('Z:'):
             test_adjust_args_and_chdir_noop('Z:\\')
     finally:
         cmd_output('subst', '/d', 'Z:')
@@ -88,7 +89,7 @@ def test_adjust_args_try_repo_repo_relative(in_git_dir):
 
 
 FNS = (
-    'autoupdate', 'clean', 'gc', 'hook_impl', 'install', 'install_hooks',
+    'autoupdate', 'clean', 'gc', 'install', 'install_hooks',
     'migrate_config', 'run', 'sample_config', 'uninstall',
     'validate_config', 'validate_manifest',
 )
@@ -97,11 +98,9 @@ CMDS = tuple(fn.replace('_', '-') for fn in FNS)
 
 @pytest.fixture
 def mock_commands():
-    mcks = {fn: mock.patch.object(main, fn).start() for fn in FNS}
-    ret = auto_namedtuple(**mcks)
-    yield ret
-    for mck in ret:
-        mck.stop()
+    with contextlib.ExitStack() as ctx:
+        mcks = {f: ctx.enter_context(mock.patch.object(main, f)) for f in FNS}
+        yield auto_namedtuple(**mcks)
 
 
 @pytest.fixture
@@ -156,6 +155,23 @@ def test_all_cmds(command, mock_commands, mock_store_dir):
     main.main((command,))
     assert getattr(mock_commands, command.replace('-', '_')).call_count == 1
     assert_only_one_mock_called(mock_commands)
+
+
+def test_hazmat(mock_store_dir):
+    with mock.patch.object(hazmat, 'impl') as mck:
+        main.main(('hazmat', 'cd', 'subdir', '--', 'cmd', '--', 'f1', 'f2'))
+    assert mck.call_count == 1
+    (arg,), dct = mck.call_args
+    assert dct == {}
+    assert arg.tool == 'cd'
+    assert arg.subdir == 'subdir'
+    assert arg.cmd == ['cmd', '--', 'f1', 'f2']
+
+
+def test_hook_impl(mock_store_dir):
+    with mock.patch.object(main, 'hook_impl') as mck:
+        main.main(('hook-impl', '--hook-type', 'pre-commit'))
+    assert mck.call_count == 1
 
 
 def test_try_repo(mock_store_dir):

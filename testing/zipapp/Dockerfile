@@ -1,9 +1,7 @@
-FROM ubuntu:jammy
+FROM ubuntu:noble
 RUN : \
     && apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        python3 \
-        python3-distutils \
         python3-venv \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*

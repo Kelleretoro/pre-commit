@@ -1,3 +1,69 @@
+4.7.0 - 2026-10-12
+==================
+
+### Fixes
+- Fix `language: node` hooks during commit with `-a` or inside a submodule.
+    - Regressed in 4.6.1.
+    - #3773 issue by @cbirkhold.
+    - #3774 PR by @cbirkhold.
+
+4.6.2 - 2026-08-10
+==================
+
+### Fixes
+- Fix `language: node` hooks that contain `"scripts": {"build": ...}` with
+  npm 11.x.
+    - Regressed in 4.6.1.
+    - #3737 issue by @mheiges.
+    - #3743 PR by @asottile.
+
+4.6.1 - 2026-07-21
+==================
+
+### Fixes
+- Install `language: node` hooks via `git`.
+    - Fixes npm 12.x compatibility
+    - #3719 PR by @asottile.
+    - #3517 issue by @ojob.
+- Set `JULIA_DEPOT_PATH` for `language: julia`.
+    - #3711 PR by @damonbayer.
+    - pre-commit-ci/runner-image#335 issue by @damonbayer.
+- Produce error on mistyped `--repo` for `pre-commit autoupdate`.
+    - #3701 PR by @mxr.
+    - #3695 issue by @mxr.
+- Improve performance of commit existence check in `pre-push`.
+    - #3726 PR by @asottile.
+    - #3604 issue by @ptarjan.
+- Avoid duplicating conflicted filenames during `pre-commit run --all-files`.
+    - #3727 PR by @asottile.
+    - #3706 issue by @RomanValov.
+
+4.6.0 - 2026-04-21
+==================
+
+### Features
+- `pre-commit hook-impl`: allow `--hook-dir` to be missing to enable easier
+  usage with `git` 2.54+ git hooks.
+    - #3662 PR by @asottile.
+
+### Fixes
+- `pre-commit hook-impl`: `--hook-type` is required.
+    - #3661 PR by @asottile.
+
+4.5.1 - 2025-12-16
+==================
+
+### Fixes
+- Fix `language: python` with `repo: local` without `additional_dependencies`.
+    - #3597 PR by @asottile.
+
+4.5.0 - 2025-11-22
+==================
+
+### Features
+- Add `pre-commit hazmat`.
+    - #3585 PR by @asottile.
+
 4.4.0 - 2025-11-08
 ==================
 

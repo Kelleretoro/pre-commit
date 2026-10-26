@@ -19,11 +19,13 @@ from testing.util import git_commit
 
 
 def _repo_count(store):
-    return len(store.select_all_repos())
+    with store.connect() as db:
+        return db.execute('SELECT COUNT(1) FROM repos').fetchone()[0]
 
 
 def _config_count(store):
-    return len(store.select_all_configs())
+    with store.connect() as db:
+        return db.execute('SELECT COUNT(1) FROM configs').fetchone()[0]
 
 
 def _remove_config_assert_cleared(store, cap_out):
@@ -153,7 +155,8 @@ def test_invalid_manifest_gcd(tempdir_factory, store, in_git_dir, cap_out):
     install_hooks(C.CONFIG_FILE, store)
 
     # we'll "break" the manifest to simulate an old version clone
-    (_, _, path), = store.select_all_repos()
+    with store.connect() as db:
+        path, = db.execute('SELECT path FROM repos').fetchone()
     os.remove(os.path.join(path, C.MANIFEST_FILE))
 
     assert _config_count(store) == 1
@@ -162,3 +165,11 @@ def test_invalid_manifest_gcd(tempdir_factory, store, in_git_dir, cap_out):
     assert _config_count(store) == 1
     assert _repo_count(store) == 0
     assert cap_out.get().splitlines()[-1] == '1 repo(s) removed.'
+
+
+def test_gc_pre_1_14_roll_forward(store, cap_out):
+    with store.connect() as db:  # simulate pre-1.14.0
+        db.executescript('DROP TABLE configs')
+
+    assert not gc(store)
+    assert cap_out.get() == '0 repo(s) removed.\n'
